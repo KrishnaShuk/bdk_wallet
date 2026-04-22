@@ -41,7 +41,8 @@ const DESCRIPTORS: [&str; 4] = [
     "wpkh([41f2aed0/84h/1h/0h]tpubDDFSdQWw75hk1ewbwnNpPp5DvXFRKt68ioPoyJDY752cNHKkFxPWqkqCyCf4hxrEfpuxh46QisehL3m8Bi6MsAv394QVLopwbtfvryFQNUH/1/*)#emtwewtk",
 ];
 
-fn create_one_inp_one_out_tx(txid: Txid, amount: u64) -> Transaction {
+/// Creates a simple one-input one-output transaction for testing.
+pub fn create_one_inp_one_out_tx(txid: Txid, amount: u64) -> Transaction {
     Transaction {
         version: transaction::Version::ONE,
         lock_time: absolute::LockTime::ZERO,
