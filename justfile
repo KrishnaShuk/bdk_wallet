@@ -24,6 +24,14 @@ check:
 fmt:
    cargo +nightly fmt
 
+# Regenerate `Cargo-recent.lock` and `Cargo-minimal.lock`
+lock:
+    cargo +nightly rbmt lock
+
+# Verify the library builds with MSRV (1.85.0)
+msrv:
+    cargo rbmt test --toolchain msrv --lock-file minimal
+
 # Run all tests on the workspace with all features
 test:
    cargo test --all-features
