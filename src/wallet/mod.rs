@@ -1115,13 +1115,58 @@ impl Wallet {
     /// Return the balance, separated into available, trusted-pending, untrusted-pending, and
     /// immature values.
     pub fn balance(&self) -> Balance {
-        self.tx_graph.graph().balance(
+        let mut immature = Amount::ZERO;
+        let mut trusted_pending = Amount::ZERO;
+        let mut untrusted_pending = Amount::ZERO;
+        let mut confirmed = Amount::ZERO;
+        let tip = self.chain.tip().block_id();
+
+        for ((k, _i), txout) in self.tx_graph.graph().filter_chain_unspents(
             &self.chain,
-            self.chain.tip().block_id(),
+            tip,
             CanonicalizationParams::default(),
             self.tx_graph.index.outpoints().iter().cloned(),
-            |&(k, _), _| k == KeychainKind::Internal,
-        )
+        ) {
+            let _ = k;
+            match &txout.chain_position {
+                ChainPosition::Confirmed { .. } => {
+                    if txout.is_confirmed_and_spendable(tip.height) {
+                        confirmed += txout.txout.value;
+                    } else if !txout.is_mature(tip.height) {
+                        immature += txout.txout.value;
+                    }
+                }
+                ChainPosition::Unconfirmed { .. } => {
+                    let is_wallet_tx = self
+                        .tx_graph
+                        .graph()
+                        .get_tx(txout.outpoint.txid)
+                        .map(|tx| {
+                            tx.is_coinbase()
+                                || tx.input.iter().all(|txin| {
+                                    self.tx_graph
+                                        .index
+                                        .txout(txin.previous_output)
+                                        .is_some()
+                                })
+                        })
+                        .unwrap_or(false);
+
+                    if is_wallet_tx {
+                        trusted_pending += txout.txout.value;
+                    } else {
+                        untrusted_pending += txout.txout.value;
+                    }
+                }
+            }
+        }
+
+        Balance {
+            immature,
+            trusted_pending,
+            untrusted_pending,
+            confirmed,
+        }
     }
 
     /// Add an external signer

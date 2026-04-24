@@ -3013,3 +3013,41 @@ fn test_tx_ordering_untouched_preserves_insertion_ordering_bnb_success() {
         "UTXOs should be ordered with required first, then selected"
     );
 }
+
+#[test]
+fn test_balance_trusted_pending_self_transfer_to_external() {
+    let (mut wallet, _) = get_funded_wallet_wpkh();
+
+    // The wallet is funded. Now we build a transaction that spends from the wallet
+    // to its own external address (self-transfer).
+    let addr = wallet.next_unused_address(KeychainKind::External);
+    let mut builder = wallet.build_tx();
+    builder.add_recipient(addr.script_pubkey(), Amount::from_sat(10_000));
+    let mut psbt = builder.finish().unwrap();
+
+    // Sign the PSBT
+    let finalized = wallet.sign(&mut psbt, SignOptions::default()).unwrap();
+    assert!(finalized);
+
+    // Extract the transaction and insert it into the wallet (unconfirmed).
+    let tx = psbt.extract_tx().expect("tx");
+    
+    // Instead of using test_utils::insert_tx, we just apply the update directly.
+    let txid = tx.compute_txid();
+    let seen_at = std::time::UNIX_EPOCH.elapsed().unwrap().as_secs();
+    let mut tx_update = bdk_chain::TxUpdate::default();
+    tx_update.txs = vec![Arc::new(tx)];
+    tx_update.seen_ats = [(txid, seen_at)].into();
+    wallet
+        .apply_update(Update {
+            tx_update,
+            ..Default::default()
+        })
+        .expect("failed to apply update");
+
+    let balance = wallet.balance();
+    // Since all inputs of the unconfirmed transaction spend from the wallet, 
+    // the outputs should be trusted pending.
+    assert!(balance.trusted_pending > Amount::ZERO);
+    assert_eq!(balance.untrusted_pending, Amount::ZERO);
+}
